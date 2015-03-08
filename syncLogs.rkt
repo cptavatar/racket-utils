@@ -4,6 +4,10 @@
 (require racket/system)
 (require racket/string)
 (require racket/port)
+(require racket/set)
+
+(require "apptech-service.rkt")
+(require "props.rkt")
 
 ; syncLogs.rkt
 ;
@@ -12,7 +16,8 @@
 
 (define env (make-parameter "qa-2"))
 (define user (make-parameter (string-trim (with-output-to-string (lambda () (system "whoami"))))))
-(define logs-home "~/Documents/logs")
+(define props (load-properties))
+(define apps (list->set '("socialnetworkservice" "socialdashboard" "socialbatch" "social" "socialmanager-server" "socialsyndicationservice")))
 
 (command-line  #:multi
                [("-u" "--user") u "Specify user for rsync"
@@ -44,6 +49,10 @@
 ;      (define warpackage (
   
 ;  ))))
-
-(printf "Given arguments: ~s ~s\n"
-          (env) (user))
+;(printf "~s" (retrieve-json "http://services.prod.cobaltgroup.com/cgi-bin/get_services/index.cgi"))
+;(printf "Given arguments: ~s ~s\n"
+;          (env) (user))
+;(for ([x apps])
+;  (printf ">~a<\n" x))
+;(map (retrieve-json (build-cdc-url env)))
+(printf "~a" (create-active-map env apps))
