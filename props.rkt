@@ -4,9 +4,16 @@
          services-postfix
          cdc-prefix
          cdc-postfix
-         logs-home)
+         logs-home
+         logserver-tuk
+         logserver-dc2)
 
 (require json)
+
+;; props.rkt
+;; 
+;; provide properties for either mutable entities, servernames, or various things I don't 
+;; want to stick up on the net. Load up from JSON file located in home dir
 
 (define (load-properties )
   (call-with-input-file (build-path (find-system-path 'home-dir ) ".cobalt.props.json") read-json))
@@ -21,3 +28,5 @@
 (define cdc-prefix (prop 'cdc-prefix))
 (define cdc-postfix (prop 'cdc-postfix))
 (define logs-home (prop 'logs-home))
+(define logserver-tuk (prop 'logserver-tuk))
+(define logserver-dc2 (prop 'logserver-dc2))
