@@ -63,7 +63,7 @@
     [ else package]))
 
 ;; given a path string like "a/b/c", return a list 
-;; of subpaths like '("a/b/c" "a/b" "a")
+;; of subpaths like '("a" "a/b" "a/b/c")
 (define (expand-path-to-list path)
   (define (expand-path-to-list from-list to-list)
     (if (empty? from-list) 
@@ -75,31 +75,51 @@
                                 to-list)))
     )(expand-path-to-list (string-split path "/" ) '()))
 
+;; merge 2 lists - why isn't this built in? Or am i missing something?
+(define (merge list-one list-two)
+  (cond
+     [(empty? list-one) list-two]
+     [(empty? list-two) list-one]
+     [else (merge (cdr list-one) (cons (car list-one) list-two))]))
+
 ;; given a list of of paths, covert them to rsync include
-;; paths while making sure to remove duplicates
+;; paths 
 (define (convert-to-include path-list)
-  (let ([x (mutable-set)])
-    (for ([path path-list])
-      (for ([elem (map (lambda (y) (string-append "--include=\"" y "\"")) (expand-path-to-list path))])
-        (set-add! x elem )
-      ))
-    (set->list x)
-  ))
+    (foldl merge '() (list
+      (foldr (lambda (x l1) 
+               (merge (foldr (lambda (y l2)
+                             (cons (string-append "--include=\"" y "\"") l2))
+                      '()
+                      (expand-path-to-list x)) l1))                 
+             '()
+             path-list
+      ))))     
 
 (define (gen-remote-paths) 
   (cond
-    ([equal? e "prod"] '( "tukpdmgsmm*/social*/*" "tukpdmgopen*/social*1.0.0*/*.log*" ))
-    ([equal? e "dev-5"] '( ))
-    [ else '() ]))
+    [(equal? (env) "prod") '( "tukpdmgsmm*/social*/*" "tukpdmgopen*/social*1.0.0*/*.log*" )]
+    [(equal? (env) "dev-5") '( "social/app*/social*/*" "services/app*/social*/*"  )]
+    [ else '( "social/cobnop*/social*/*" "services/cobnop*/social*/*" ) ]))
     
 (define (gen-server-string)
   (string-append (user) "@"
                  (cond
-                   ([equal? e "prod"] (string-append logserver-tuk ":/cobalt/logs/services/"))
-                   [else (string-append logserver-dc2 ":/opt/logs/" (env) "/services/") ])))
+                   ([equal? (env) "prod"] (string-append logserver-tuk ":/cobalt/logs/services/"))
+                   [else (string-append logserver-dc2 ":/opt/logs/" (env) "/") ])))
 
-(define (rsync paths)
-  (system (string-join "rsync -avz" 
-                       (string-join (convert-to-include paths)))))
-                       
-                       
+(define (gen-rsync-cmd )
+   (string-join (list "rsync -azv"                 
+                       (string-join (convert-to-include (gen-remote-paths)))
+                       "--exclude=\"*\""
+                       (gen-server-string)
+                       (string-append logs-home "/" (env))
+                       )))
+
+(define cmd (gen-rsync-cmd))
+
+;(system (gen-rsync-cmd))
+
+;; figure out the most recent version of an application
+(define (most-recent-package app)
+  (printf "~a" (with-output-to-string (lambda () (system (string-append "ls " logs-home "/" (env) "/*/* | grep \"" app "-\" | grep \"v-1\" | sort -r | head -1 "
+                     ))))))
