@@ -4,7 +4,7 @@
          services-postfix
          cdc-prefix
          cdc-postfix
-         logs-home
+         logs-base
          logserver-tuk
          logserver-dc2)
 
@@ -27,6 +27,6 @@
 (define services-postfix (prop 'services-postfix))
 (define cdc-prefix (prop 'cdc-prefix))
 (define cdc-postfix (prop 'cdc-postfix))
-(define logs-home (prop 'logs-home))
+(define logs-base (prop 'logs-base))
 (define logserver-tuk (prop 'logserver-tuk))
 (define logserver-dc2 (prop 'logserver-dc2))

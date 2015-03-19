@@ -8,6 +8,7 @@
 (require racket/list)
 
 (require "apptech-service.rkt")
+(require "shell-helper.rkt")
 (require "props.rkt")
 
 ; syncLogs.rkt
@@ -16,7 +17,7 @@
 ; each of the products we care about. 
 
 (define env (make-parameter "qa-2"))
-(define user (make-parameter (string-trim (with-output-to-string (lambda () (system "whoami"))))))
+(define user (make-parameter (run-with-output-trimmed "whoami")))
 
 (define apps (list->set '("socialnetworkservice"
                           "socialdashboard" 
@@ -36,6 +37,7 @@
                [("-e" "--env") e "Specify env for rsync"
                                (env e)])
 
+(define (logs-dir) (string-append logs-base "/" (env))) 
 
 (define (warpackage package)
   (cond 
@@ -107,19 +109,25 @@
                    ([equal? (env) "prod"] (string-append logserver-tuk ":/cobalt/logs/services/"))
                    [else (string-append logserver-dc2 ":/opt/logs/" (env) "/") ])))
 
-(define (gen-rsync-cmd )
+(define (rsync-cmd )
    (string-join (list "rsync -azv"                 
                        (string-join (convert-to-include (gen-remote-paths)))
                        "--exclude=\"*\""
                        (gen-server-string)
-                       (string-append logs-home "/" (env))
+                       (logs-dir)
                        )))
 
-(define cmd (gen-rsync-cmd))
+(system (rsync-cmd))
+(system (clean-logs-cmd (logs-dir)))
 
-;(system (gen-rsync-cmd))
+(for ([app apps])
+  (let ([most-recent (run-with-output-trimmed (most-recent-package-cmd app (logs-dir)))])
+    (printf "~a \n" (run-with-output (find-log-files-cmd most-recent (logfile app) (logs-dir))))
+    )
+  )
 
-;; figure out the most recent version of an application
-(define (most-recent-package app)
-  (printf "~a" (with-output-to-string (lambda () (system (string-append "ls " logs-home "/" (env) "/*/* | grep \"" app "-\" | grep \"v-1\" | sort -r | head -1 "
-                     ))))))
+
+
+
+
+
