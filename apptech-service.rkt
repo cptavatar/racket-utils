@@ -1,9 +1,16 @@
 #lang racket/base
+;
+; apptech-service.rkt
+; 
+; functions for retrieving data from some of apptech's
+; metadata services
+;
 
 (provide retrieve-json 
          build-cdc-url
          build-services-url
-         create-active-map)
+         create-active-map
+         )
 
 (require net/url)
 (require racket/port)
@@ -36,6 +43,7 @@
              #:when (and (set-member? app-set (hash-ref app 'name))
                          (hash-ref app 'active)))
     (hash-set x (hash-ref app 'name)(hash-ref app 'candidate))))
+
 
 ;(define (create-node-map env)
 ;  (for/fold ([x (hash)])

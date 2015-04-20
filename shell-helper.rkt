@@ -1,6 +1,10 @@
-#!/usr/local/bin/racket
-
 #lang racket/base
+
+;
+; shell-helper.rkt
+;
+; functions for interacting with the shell
+;
 
 (require 
   racket/port
@@ -10,8 +14,10 @@
 
 (provide run-with-output
          run-with-output-trimmed
+         run-with-output-split
          most-recent-package-cmd
          find-log-files-cmd
+         combine-file-cmd
          clean-logs-cmd)
 
 
@@ -21,17 +27,19 @@
 
 (define (run-with-output-trimmed cmd)
   (string-trim (run-with-output cmd)))
-  
 
-(define (most-recent-package-cmd app logs-dir)
-  (string-append "ls " logs-dir "/*/* | grep \"" app "-\" | grep \"v-1\" | sort -r | head -1 "
+(define (run-with-output-split cmd)
+  (string-split (run-with-output cmd) "\n" ))
+
+(define (most-recent-package-cmd app-base logs-dir )
+  (string-append "ls " logs-dir "/*/* | grep " app-base " | sort -r | head -1 "
                      ))
 
-(define (find-log-files-cmd pkg-version log-name logs-dir)
-  (string-append "find " logs-dir "/*/*/" pkg-version " -name " log-name ".log"))
+(define (find-log-files-cmd log-name find-dir)
+  (string-append "find " find-dir " -name " log-name ))
 
-(define (combine-file-cmd file pkg-version logs-dir)
-  (string-append "cat " file " >> " logs-dir "/" pkg-version ".log"))
+(define (combine-file-cmd file new-name logs-dir)
+  (string-append "cat " file " >> " logs-dir "/" new-name ".log"))
 
 (define (clean-logs-cmd logs-dir )
   (string-append "rm " logs-dir "/*.log"))

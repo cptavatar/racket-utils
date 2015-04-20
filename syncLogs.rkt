@@ -1,130 +1,58 @@
 #!/usr/local/bin/racket
 #lang racket/base
-(require racket/cmdline)
-(require racket/system)
-(require racket/string)
-(require racket/port)
-(require racket/set)
-(require racket/list)
-
-(require "apptech-service.rkt")
-(require "shell-helper.rkt")
-(require "props.rkt")
-
+;
 ; syncLogs.rkt
 ;
 ; Utility to rsync logs for the given environment, extract/collate the logs for the latest version deployed for
-; each of the products we care about. 
+; each of the products we care about.
+;
 
-(define env (make-parameter "qa-2"))
-(define user (make-parameter (run-with-output-trimmed "whoami")))
+(require 
+  racket/cmdline
+  racket/system
+  racket/string
+  racket/port
+  racket/set
+  racket/list)
 
-(define apps (list->set '("socialnetworkservice"
-                          "socialdashboard" 
-                          "socialbatch" 
-                          "social" 
-                          "socialmanager-server"
-                          "socialsyndicationservice")))
+(require 
+  "apptech-service.rkt"
+  "shell-helper.rkt"
+  "props.rkt"
+  "application.rkt"
+  "rsync.rkt"
+  )
 
-(define versioned-set (list->set '("socialnetworkservice"
-                                   "socialdashboard" 
-                                   "social" 
-                                   "socialmanager-server")))
 
+;; Set up our command line parameters 
+;; the defaults are set here, 
+;; the actual values are retrieved by calling the function
+(define envp (make-parameter "qa-2"))
+(define userp (make-parameter (run-with-output-trimmed "whoami")))
 (command-line  #:multi
                [("-u" "--user") u "Specify user for rsync"
-                                (user u)]
+                                (userp u)]
                [("-e" "--env") e "Specify env for rsync"
-                               (env e)])
+                               (envp e)])
 
-(define (logs-dir) (string-append logs-base "/" (env))) 
+;; define the logs dir based on the environment
+;; logs-base is property
+(define logs-dir (string-append logs-base "/" (envp))) 
 
-(define (warpackage package)
-  (cond 
-    [(equal? package "socialplatform-batch") "socialplatform-batch-1.0"]
-    [(equal? package "socialsyndication") "socialsyndication-webapp-1.0"]
-    [ else (string-append package "_1.0.0")]))
 
-(define (offset-url package active-version)
-  (string-append "/" 
-                 (warpackage package) 
-                 (if (set-member? versioned-set package)
-                     (string-append "-" active-version)
-                     "")))
-
-(define (logfile package)
-  (cond 
-    [(equal? package "socialnetworkservice") "socialnetwork"]
-    [(equal? package "socialsyndicationservice") "socialsyndication"]
-    [ else package]))
-
-(define (version-exists logs-home-env package)
-  (cond 
-    [(equal? package "socialnetworkservice") "socialnetwork"]
-    [(equal? package "socialsyndicationservice") "socialsyndication"]
-    [ else package]))
-
-;; given a path string like "a/b/c", return a list 
-;; of subpaths like '("a" "a/b" "a/b/c")
-(define (expand-path-to-list path)
-  (define (expand-path-to-list from-list to-list)
-    (if (empty? from-list) 
-        to-list
-        (expand-path-to-list (cdr from-list) 
-                          (cons (if (empty? to-list)
-                                    (car from-list)
-                                    (string-append  (car to-list) "/" (car from-list))) 
-                                to-list)))
-    )(expand-path-to-list (string-split path "/" ) '()))
-
-;; merge 2 lists - why isn't this built in? Or am i missing something?
-(define (merge list-one list-two)
-  (cond
-     [(empty? list-one) list-two]
-     [(empty? list-two) list-one]
-     [else (merge (cdr list-one) (cons (car list-one) list-two))]))
-
-;; given a list of of paths, covert them to rsync include
-;; paths 
-(define (convert-to-include path-list)
-    (foldl merge '() (list
-      (foldr (lambda (x l1) 
-               (merge (foldr (lambda (y l2)
-                             (cons (string-append "--include=\"" y "\"") l2))
-                      '()
-                      (expand-path-to-list x)) l1))                 
-             '()
-             path-list
-      ))))     
-
-(define (gen-remote-paths) 
-  (cond
-    [(equal? (env) "prod") '( "tukpdmgsmm*/social*/*" "tukpdmgopen*/social*1.0.0*/*.log*" )]
-    [(equal? (env) "dev-5") '( "social/app*/social*/*" "services/app*/social*/*"  )]
-    [ else '( "social/cobnop*/social*/*" "services/cobnop*/social*/*" ) ]))
-    
-(define (gen-server-string)
-  (string-append (user) "@"
-                 (cond
-                   ([equal? (env) "prod"] (string-append logserver-tuk ":/cobalt/logs/services/"))
-                   [else (string-append logserver-dc2 ":/opt/logs/" (env) "/") ])))
-
-(define (rsync-cmd )
-   (string-join (list "rsync -azv"                 
-                       (string-join (convert-to-include (gen-remote-paths)))
-                       "--exclude=\"*\""
-                       (gen-server-string)
-                       (logs-dir)
-                       )))
-
-(system (rsync-cmd))
-(system (clean-logs-cmd (logs-dir)))
+;; run the sync command, then clean the logs
+(system (gen-rsync-cmd (userp) (envp) logs-dir))
+(system (clean-logs-cmd logs-dir))
 
 (for ([app apps])
-  (let ([most-recent (run-with-output-trimmed (most-recent-package-cmd app (logs-dir)))])
-    (printf "~a \n" (run-with-output (find-log-files-cmd most-recent (logfile app) (logs-dir))))
+  (let* ([most-recent-fullname (run-with-output-trimmed (most-recent-package-cmd (app-log-base app) logs-dir))]
+         [version (extract-version most-recent-fullname)]
+         [files (run-with-output-split (find-log-files-cmd  (logfile app) (gen-find-dir app logs-dir most-recent-fullname)))])
+    (printf "App: ~a Newest:~a Version:~a \n ~a\n" app most-recent-fullname version files)
+    (for ([f files])
+      (system (combine-file-cmd f (string-append app "." version ".newest") logs-dir))
     )
-  )
+  ))
 
 
 
